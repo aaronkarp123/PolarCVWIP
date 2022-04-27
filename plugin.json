@@ -1,0 +1,23 @@
+{
+  "slug": "Tester",
+  "name": "tester-module",
+  "version": "2.0.0",
+  "license": "proprietary",
+  "brand": "Polar",
+  "author": "Aaron Karp",
+  "authorEmail": "",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "Tester",
+      "name": "tester",
+      "description": "A CV Generator",
+      "tags": []
+    }
+  ]
+}
