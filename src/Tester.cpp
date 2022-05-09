@@ -7,8 +7,8 @@ static const int BUFFER_SIZE = 1024;//256;
 
 Vec polarToCart(Vec point){
     Vec new_point;
-    new_point.x = point.y * sin(point.x) / 2.0f;
-    new_point.y = point.y * cos(point.x) / 2.0f;
+    new_point.x = point.y * sin(point.x);
+    new_point.y = point.y * cos(point.x);
     return new_point;
 }
 
@@ -42,8 +42,11 @@ struct Tester : Module {
     float cur_theta = 0.0f;
     float theta_delta = 0.001f;
     int current_equation = 0;
-    bool prev_trig = false;
-    bool double_time = false;
+    bool prev_next_eq_trig = false;
+    bool prev_prev_eq_trig = false;
+    int time_mult_idx = 0;
+    float time_mults[3] = {0.5f, 1.f, 2.f};
+    bool prev_time_mult = false;
     
     struct Point {
         float minX[16] = {};
@@ -81,33 +84,42 @@ struct Tester : Module {
     }
     
     void process(const ProcessArgs& args) override {
-        double_time = params[SPEED_MULT_PARAM].getValue();
-
-        bool trig = !params[NEXT_EQ_PARAM].getValue();
+        int max_eqs = 4;
         
-        if (trig != prev_trig){
-            current_equation = (current_equation + 1) % 4;
+        bool double_time = params[SPEED_MULT_PARAM].getValue();
+        if (prev_time_mult != double_time){
+            time_mult_idx = (time_mult_idx + 1) % 3;
         }
-        prev_trig = trig;
+        prev_time_mult = double_time;
+
+        bool next_trig = !params[NEXT_EQ_PARAM].getValue();
+        if (next_trig != prev_next_eq_trig){
+            current_equation = (current_equation + 1) % max_eqs;
+        }
+        prev_next_eq_trig = next_trig;
+        
+        bool prev_trig = !params[PREV_EQ_PARAM].getValue();
+        if (prev_trig != prev_prev_eq_trig){
+            current_equation = current_equation - 1;
+            if (current_equation < 0){
+                current_equation = max_eqs - 1;
+            }
+        }
+        prev_prev_eq_trig = prev_trig;
 
         //current Carts
         Vec carts = polarToCart(current_cursor);
         
-        outputs[R_OUT_OUTPUT].setVoltage(current_cursor.x*20.0f);
-        outputs[X_OUT_OUTPUT].setVoltage(carts.x*20.0f);
-        outputs[Y_OUT_OUTPUT].setVoltage(carts.y*20.0f);
+        outputs[R_OUT_OUTPUT].setVoltage(current_cursor.y*10.0f);
+        outputs[X_OUT_OUTPUT].setVoltage(carts.x*10.0f);
+        outputs[Y_OUT_OUTPUT].setVoltage(carts.y*10.0f);
     
         updateTheta();
     }
     
     void updateTheta() {
         
-        if (double_time){
-            theta_delta = params[SPEED_DIAL_PARAM].getValue() * M_PI / 100.0f;
-        }
-        else{
-            theta_delta = params[SPEED_DIAL_PARAM].getValue() * M_PI / 1000.0f;
-        }
+        theta_delta = params[SPEED_DIAL_PARAM].getValue() * M_PI / 1000.0f * (time_mults[time_mult_idx] * time_mults[time_mult_idx]) + 0.000001f;
         cur_theta = cur_theta + theta_delta;
         
         float A = params[A_DIAL_PARAM].getValue() / 2.0f;
@@ -125,7 +137,7 @@ struct Tester : Module {
                 r = cos(A * cos(B * cur_theta));
                 break;
             case 3:
-                r = sin(A *cur_theta) * cos(B * cur_theta);
+                r = sin((A/B) *cur_theta);
                 break;
         }
         
@@ -175,7 +187,7 @@ struct TesterDisplay : LedDisplay {
         }
         
         nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
-        nvgStrokeColor(args.vg, nvgRGB(0xde, 0xde, 0xff));
+        nvgStrokeColor(args.vg, nvgRGB(0xc9, 0xf2, 0xff));
         nvgStrokeWidth(args.vg, 0.3f);
         nvgStroke(args.vg);
         nvgResetScissor(args.vg);
@@ -192,25 +204,31 @@ struct TesterDisplay : LedDisplay {
         nvgBeginPath(args.vg);
         
         Vec p = polarToCart(current_cursor);
+        p.x = p.x/2.0f;
+        p.y = p.y/2.0f;
         p.x += 0.5f;
         p.y += 0.5f;
         p = b.interpolate(p);
-        nvgMoveTo(args.vg, p.x-0.008f,  p.y-0.008f);
-        nvgLineTo(args.vg, p.x+0.008f,  p.y-0.008f);
-        nvgLineTo(args.vg, p.x+0.008f,  p.y+0.008f);
-        nvgLineTo(args.vg, p.x-0.008f,  p.y+0.008f);
-        nvgMoveTo(args.vg, p.x-0.008f,  p.y-0.008f);
-        nvgClosePath(args.vg);
+        nvgMoveTo(args.vg, p.x,  p.y-0.12f);
+        nvgLineTo(args.vg, p.x-0.08f,  p.y-0.12f);
+        nvgLineTo(args.vg, p.x-0.12f,  p.y);
+        nvgLineTo(args.vg, p.x-0.04f,  p.y+0.12f);
+        nvgLineTo(args.vg, p.x+0.04f,  p.y+0.12f);
+        nvgLineTo(args.vg, p.x+0.12f,  p.y);
+        nvgLineTo(args.vg, p.x+0.04f,  p.y-0.12f);
+        nvgLineTo(args.vg, p.x,  p.y-0.12f);
+        //nvgClosePath(args.vg);
         nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
         nvgStrokeColor(args.vg, nvgRGB(0xFF, 0x00, 0x00));
-        nvgStrokeWidth(args.vg, 2.0f);
+        nvgStrokeWidth(args.vg, 3.0f);
         nvgStroke(args.vg);
-        //nvgFill(args.vg);
+        nvgFillColor(args.vg, nvgRGB(0xFF, 0x00, 0x00));
+        nvgFill(args.vg);
         nvgResetScissor(args.vg);
         nvgRestore(args.vg);
     }
     
-    void drawStats(const DrawArgs& args, Vec pos, const char* title, const Stats& stats, float A, float B, int current_equation) {
+    void drawStats(const DrawArgs& args, Vec pos, const char* title, const Stats& stats, float A, float B, int current_equation, float time_mult) {
         std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
         if (!font)
             return;
@@ -225,13 +243,14 @@ struct TesterDisplay : LedDisplay {
         pos = pos.plus(Vec(22, 11));
 
         std::string text;
-        text = "pp ";
-        float pp = stats.max - stats.min;
-        text += isNear(pp, 0.f, 100.f) ? string::f("% 6.2f", pp) : "  ---";
+        text = u8"\u0394";
+        text += std::to_string(time_mult).substr(0, 3);
+        //float pp = stats.max - stats.min;
+        //text += isNear(pp, 0.f, 100.f) ? string::f("% 6.2f", pp) : "  ---";
         nvgText(args.vg, pos.x, pos.y, text.c_str(), NULL);
         switch (current_equation) {
           case 0:
-                text = std::to_string((floor((A*2)+0.5)/2)).substr(0, 3) + "sin(theta) + " + std::to_string((floor((B*2)+0.5)/2)).substr(0, 3) + "cos(theta)";
+                text = std::to_string((floor((A*2)+0.5)/2)).substr(0, 3) + "sin(thetaθ) + " + std::to_string((floor((B*2)+0.5)/2)).substr(0, 3) + "cos(theta)";
                 break;
           case 1:
                 text = "sin("+std::to_string((floor((A*2)+0.5)/2)).substr(0, 3)+"cos(" + std::to_string((floor((B*2)+0.5)/2)).substr(0, 3) + "theta))";
@@ -240,7 +259,7 @@ struct TesterDisplay : LedDisplay {
                 text = "cos("+std::to_string((floor((A*2)+0.5)/2)).substr(0, 3)+"cos(" + std::to_string((floor((B*2)+0.5)/2)).substr(0, 3) + "theta))";
                 break;
             case 3:
-                    text = "sin("+std::to_string((floor((A*2)+0.5)/2)).substr(0, 3)+") * cos(" + std::to_string((floor((B*2)+0.5)/2)).substr(0, 3) + "theta)";
+                    text = "sin("+std::to_string((floor((A*2)+0.5)/2)).substr(0, 3)+"/"+std::to_string((floor((B*2)+0.5)/2)).substr(0, 3)+"theta)";
                     break;
         }
         nvgText(args.vg, pos.x + 58 * 1, pos.y, text.c_str(), NULL);
@@ -283,7 +302,7 @@ struct TesterDisplay : LedDisplay {
                 min_repeat_pi  = 4.0f * M_PI;
                 break;
             case 3:
-                r = sin(A *theta) * cos(B * theta);
+                r = sin((A/B) *theta);
                 min_repeat_pi  = 8.0f * M_PI;
                 break;
                 
@@ -296,6 +315,8 @@ struct TesterDisplay : LedDisplay {
             tempp.x = theta;
             tempp.y = r;
             Vec p = polarToCart(tempp);
+            p.x = p.x/2.0f;
+            p.y = p.y/2.0f;
             p.x += 0.5f;
             p.y += 0.5f;
             current_points [i] = p;
@@ -312,7 +333,7 @@ struct TesterDisplay : LedDisplay {
                   r = cos(A * cos(B * theta));
                   break;
                 case 3:
-                    r = sin(A *theta) * cos(B * theta);
+                    r = sin((A/B) *theta);
                     break;
             }
         }
@@ -342,7 +363,7 @@ struct TesterDisplay : LedDisplay {
         drawEq(args, A, B, module->cur_theta, current_points);
         drawCursor(args, A, B, module->cur_theta, module->current_cursor);
         
-        drawStats(args, Vec(0, 0 + 1), "1", statsX, A, B, module->current_equation);
+        drawStats(args, Vec(0, 0 + 1), "1", statsX, A, B, module->current_equation, module->time_mults[module->time_mult_idx]);
     }
     
 };
@@ -351,7 +372,7 @@ struct TesterDisplay : LedDisplay {
 struct TesterWidget : ModuleWidget {
     TesterWidget(Tester* module) {
         setModule(module);
-        setPanel(createPanel(asset::plugin(pluginInstance, "res/Tester.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/re-Scope.svg")));
 
         addChild(createWidget<ScrewSilver>(Vec(RACK_GRID_WIDTH, 0)));
         addChild(createWidget<ScrewSilver>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, 0)));
